@@ -112,26 +112,25 @@ def main():
     user_query = st.text_input("Enter your query:", placeholder="e.g., How many 'R's are in the word strawberry?")
 
     if user_query:
-        st.write("Generating response...")
+        with st.spinner("Generating response..."):  # Add loading indicator
+            # Create empty elements to hold the generated text and total time
+            response_container = st.empty()
+            time_container = st.empty()
 
-        # Create empty elements to hold the generated text and total time
-        response_container = st.empty()
-        time_container = st.empty()
-
-        # Generate and display the response
-        for steps, total_thinking_time in generate_response(user_query):
-            with response_container.container():
-                for i, (title, content, thinking_time) in enumerate(steps):
-                    if title.startswith("Final Answer"):
-                        st.markdown(f"### {title}")
-                        st.markdown(content.replace("\n", "<br>"), unsafe_allow_html=True)
-                    else:
-                        with st.expander(title, expanded=True):
+            # Generate and display the response
+            for steps, total_thinking_time in generate_response(user_query):
+                with response_container.container():
+                    for i, (title, content, thinking_time) in enumerate(steps):
+                        if title.startswith("Final Answer"):
+                            st.markdown(f"### {title}")
                             st.markdown(content.replace("\n", "<br>"), unsafe_allow_html=True)
+                        else:
+                            with st.expander(title, expanded=True):
+                                st.markdown(content.replace("\n", "<br>"), unsafe_allow_html=True)
 
-            # Only show total time when it's available at the end
-            if total_thinking_time is not None:
-                time_container.markdown(f"**Total thinking time: {total_thinking_time:.2f} seconds**")
+                # Only show total time when it's available at the end
+                if total_thinking_time is not None:
+                    time_container.markdown(f"**Total thinking time: {total_thinking_time:.2f} seconds**")
 
 
 if __name__ == "__main__":
