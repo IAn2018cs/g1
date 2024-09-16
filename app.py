@@ -2,17 +2,18 @@ import json
 import os
 import time
 
-import groq
 import streamlit as st
+from dotenv import load_dotenv
 
-client = groq.Groq()
+load_dotenv()
+from litellm import completion
 
 
 def make_api_call(messages, max_tokens, is_final_answer=False):
     for attempt in range(3):
         try:
-            response = client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
+            response = completion(
+                model="gpt-4o",
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=0.2,
@@ -63,7 +64,7 @@ Example of a valid JSON response:
 
     while True:
         start_time = time.time()
-        step_data = make_api_call(messages, 300)
+        step_data = make_api_call(messages, 4096)
         end_time = time.time()
         thinking_time = end_time - start_time
         total_thinking_time += thinking_time
@@ -84,7 +85,7 @@ Example of a valid JSON response:
     messages.append({"role": "user", "content": "Please provide the final answer based on your reasoning above."})
 
     start_time = time.time()
-    final_data = make_api_call(messages, 200, is_final_answer=True)
+    final_data = make_api_call(messages, 4096, is_final_answer=True)
     end_time = time.time()
     thinking_time = end_time - start_time
     total_thinking_time += thinking_time
@@ -97,13 +98,13 @@ Example of a valid JSON response:
 def main():
     st.set_page_config(page_title="g1 prototype", page_icon="🧠", layout="wide")
 
-    st.title("g1: Using Llama-3.1 70b on Groq to create o1-like reasoning chains")
+    st.title("g1: Using GPT-4o to create o1-like reasoning chains")
 
     st.markdown(
         """
-    This is an early prototype of using prompting to create o1-like reasoning chains to improve output accuracy. It is not perfect and accuracy has yet to be formally evaluated. It is powered by Groq so that the reasoning step is fast!
+    This is an early prototype of using prompting to create o1-like reasoning chains to improve output accuracy. It is not perfect and accuracy has yet to be formally evaluated.
                 
-    Open source [repository here](https://github.com/bklieger-groq)
+    Open source [repository here](https://github.com/Theigrams/g1)
     """
     )
 
