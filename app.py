@@ -136,25 +136,31 @@ def main():
 
     with st.sidebar:
         st.markdown("## 🛠️ Settings")
-        max_steps = st.slider("Max Steps", 3, 10, 5)
-        temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.1)
 
-        # Modify model selection
+        st.markdown("<br>", unsafe_allow_html=True)  # 添加间距
+
+        st.markdown("### 🤖 Model Settings")
         model_options = ["gpt-4o", "gpt-4o-mini", "custom"]
         selected_model = st.selectbox("Select Model", model_options)
 
-        # Add custom model input
         if selected_model == "custom":
             custom_model = st.text_input("Enter custom model name")
-            model = custom_model if custom_model else "gpt-4o"  # If not entered, use gpt-4o as default
+            model = custom_model if custom_model else "gpt-4o"
         else:
             model = selected_model
 
-        # Add API key and API base input
+        st.markdown("<br>", unsafe_allow_html=True)  # 添加间距
+
+        st.markdown("### ⚙️ Generation Settings")
+        max_steps = st.slider("Max Steps", 3, 10, 5)
+        temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.1)
+
+        st.markdown("<br>", unsafe_allow_html=True)  # 添加间距
+
+        st.markdown("### 🔑 API Settings")
         api_key = st.text_input("API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
         api_base = st.text_input("API Base URL", value=os.getenv("OPENAI_API_BASE", ""))
 
-        # Save API settings
         if st.button("Save API Settings"):
             os.environ["OPENAI_API_KEY"] = api_key
             os.environ["OPENAI_API_BASE"] = api_base
