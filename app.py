@@ -122,11 +122,10 @@ def main():
                 with response_container.container():
                     for i, (title, content, thinking_time) in enumerate(steps):
                         if title.startswith("Final Answer"):
-                            st.markdown(f"### {title}")
-                            st.markdown(content.replace("\n", "<br>"), unsafe_allow_html=True)
+                            st.subheader(title)  # Use subheader instead of markdown
                         else:
-                            with st.expander(title, expanded=True):
-                                st.markdown(content.replace("\n", "<br>"), unsafe_allow_html=True)
+                            with st.expander(f"{title} (Thinking time: {thinking_time:.2f} seconds)", expanded=True):
+                                st.write(content)  # Use write instead of markdown to avoid HTML escaping issues
 
                 # Only show total time when it's available at the end
                 if total_thinking_time is not None:
