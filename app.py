@@ -9,11 +9,11 @@ load_dotenv()
 from litellm import completion
 
 
-def make_api_call(messages, max_tokens, temperature=0.2, is_final_answer=False):
+def make_api_call(messages, max_tokens, temperature=0.2, is_final_answer=False, model="gpt-4o"):
     for attempt in range(3):
         try:
             response = completion(
-                model="gpt-4o",
+                model=model,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
@@ -36,7 +36,7 @@ def make_api_call(messages, max_tokens, temperature=0.2, is_final_answer=False):
             time.sleep(1)  # Wait for 1 second before retrying
 
 
-def generate_response(prompt, max_steps=5, temperature=0.2):
+def generate_response(prompt, max_steps=5, temperature=0.2, model="gpt-4o"):
     messages = [
         {
             "role": "system",
@@ -64,7 +64,7 @@ Example of a valid JSON response:
 
     while True:
         start_time = time.time()
-        step_data = make_api_call(messages, 4096, temperature=temperature)
+        step_data = make_api_call(messages, 4096, temperature=temperature, model=model)
         end_time = time.time()
         thinking_time = end_time - start_time
         total_thinking_time += thinking_time
@@ -85,7 +85,7 @@ Example of a valid JSON response:
     messages.append({"role": "user", "content": "Please provide the final answer based on your reasoning above."})
 
     start_time = time.time()
-    final_data = make_api_call(messages, 4096, temperature=temperature, is_final_answer=True)
+    final_data = make_api_call(messages, 4096, temperature=temperature, is_final_answer=True, model=model)
     end_time = time.time()
     thinking_time = end_time - start_time
     total_thinking_time += thinking_time
@@ -113,6 +113,19 @@ def main():
         max_steps = st.slider("Max Steps", 3, 10, 5)
         temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.1)
 
+        # Add model selection
+        model = st.selectbox("Select Model", ["gpt-4o", "gpt-4o-mini"])
+
+        # Add API key and API base input
+        api_key = st.text_input("API Key", type="password")
+        api_base = st.text_input("API Base URL")
+
+        # Save API settings
+        if st.button("Save API Settings"):
+            os.environ["OPENAI_API_KEY"] = api_key
+            os.environ["OPENAI_API_BASE"] = api_base
+            st.success("API settings saved successfully")
+
     # Text input for user query
     user_query = st.text_input("Enter your query:", placeholder="e.g., How many 'R's are in the word strawberry?")
 
@@ -124,7 +137,7 @@ def main():
 
             # Generate and display the response
             for steps, total_thinking_time in generate_response(
-                user_query, max_steps=max_steps, temperature=temperature
+                user_query, max_steps=max_steps, temperature=temperature, model=model
             ):
                 with response_container.container():
                     for i, (title, content, thinking_time) in enumerate(steps):
