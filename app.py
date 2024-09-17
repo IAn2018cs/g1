@@ -9,14 +9,14 @@ load_dotenv()
 from litellm import completion
 
 
-def make_api_call(messages, max_tokens, is_final_answer=False):
+def make_api_call(messages, max_tokens, temperature=0.2, is_final_answer=False):
     for attempt in range(3):
         try:
             response = completion(
                 model="gpt-4o",
                 messages=messages,
                 max_tokens=max_tokens,
-                temperature=0.2,
+                temperature=temperature,
                 response_format={"type": "json_object"},
             )
             return json.loads(response.choices[0].message.content)
@@ -36,7 +36,7 @@ def make_api_call(messages, max_tokens, is_final_answer=False):
             time.sleep(1)  # Wait for 1 second before retrying
 
 
-def generate_response(prompt):
+def generate_response(prompt, max_steps=5, temperature=0.2):
     messages = [
         {
             "role": "system",
@@ -64,7 +64,7 @@ Example of a valid JSON response:
 
     while True:
         start_time = time.time()
-        step_data = make_api_call(messages, 4096)
+        step_data = make_api_call(messages, 4096, temperature=temperature)
         end_time = time.time()
         thinking_time = end_time - start_time
         total_thinking_time += thinking_time
@@ -73,7 +73,7 @@ Example of a valid JSON response:
 
         messages.append({"role": "assistant", "content": json.dumps(step_data)})
 
-        if step_data["next_action"] == "final_answer":
+        if step_data["next_action"] == "final_answer" or step_count >= max_steps:
             break
 
         step_count += 1
@@ -85,7 +85,7 @@ Example of a valid JSON response:
     messages.append({"role": "user", "content": "Please provide the final answer based on your reasoning above."})
 
     start_time = time.time()
-    final_data = make_api_call(messages, 4096, is_final_answer=True)
+    final_data = make_api_call(messages, 4096, temperature=temperature, is_final_answer=True)
     end_time = time.time()
     thinking_time = end_time - start_time
     total_thinking_time += thinking_time
@@ -108,6 +108,11 @@ def main():
     """
     )
 
+    with st.sidebar:
+        st.subheader("Settings")
+        max_steps = st.slider("Max Steps", 3, 10, 5)
+        temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.1)
+
     # Text input for user query
     user_query = st.text_input("Enter your query:", placeholder="e.g., How many 'R's are in the word strawberry?")
 
@@ -118,7 +123,9 @@ def main():
             time_container = st.empty()
 
             # Generate and display the response
-            for steps, total_thinking_time in generate_response(user_query):
+            for steps, total_thinking_time in generate_response(
+                user_query, max_steps=max_steps, temperature=temperature
+            ):
                 with response_container.container():
                     for i, (title, content, thinking_time) in enumerate(steps):
                         if title.startswith("Final Answer"):
