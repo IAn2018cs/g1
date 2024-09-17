@@ -125,8 +125,8 @@ def main():
             model = selected_model
 
         # Add API key and API base input
-        api_key = st.text_input("API Key", type="password")
-        api_base = st.text_input("API Base URL")
+        api_key = st.text_input("API Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
+        api_base = st.text_input("API Base URL", value=os.getenv("OPENAI_API_BASE", ""))
 
         # Save API settings
         if st.button("Save API Settings"):
