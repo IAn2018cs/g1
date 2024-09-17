@@ -102,6 +102,32 @@ def main():
 
     st.markdown(
         """
+    <style>
+        /* New styles */
+        h1, h2, h3 {
+            color: #1e3a8a;
+        }
+
+        /* Sidebar style adjustments */
+        .css-1d391kg {
+            padding-top: 1rem;
+            padding-right: 0.5rem;
+            padding-left: 0.5rem;
+        }
+        .css-1d391kg .block-container {
+            padding-top: 1rem;
+        }
+        /* Adjust sidebar width */
+        .css-1q1n0ol {
+            max-width: 14rem;
+        }
+    </style>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
     This is an early prototype of using prompting to create o1-like reasoning chains to improve output accuracy. It is not perfect and accuracy has yet to be formally evaluated.
                 
     Open source [repository here](https://github.com/Theigrams/g1)
@@ -109,7 +135,7 @@ def main():
     )
 
     with st.sidebar:
-        st.subheader("Settings")
+        st.markdown("## 🛠️ Settings")
         max_steps = st.slider("Max Steps", 3, 10, 5)
         temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.1)
 
@@ -135,6 +161,7 @@ def main():
             st.success("API settings saved successfully")
 
     # Text input for user query
+    st.markdown("### 🔍 Enter your query")
     user_query = st.text_input("Enter your query:", placeholder="e.g., How many 'R's are in the word strawberry?")
 
     if user_query:
@@ -150,15 +177,15 @@ def main():
                 with response_container.container():
                     for i, (title, content, thinking_time) in enumerate(steps):
                         if title.startswith("Final Answer"):
-                            st.subheader(title)  # Use subheader instead of markdown
-                            st.write(content)
+                            st.markdown(f"### 🎯 {title}")
+                            st.info(content)
                         else:
-                            with st.expander(f"{title} (Thinking time: {thinking_time:.2f} seconds)", expanded=True):
+                            with st.expander(f"🧠 {title} (Thinking time: {thinking_time:.2f} seconds)", expanded=True):
                                 st.write(content)  # Use write instead of markdown to avoid HTML escaping issues
 
                 # Only show total time when it's available at the end
                 if total_thinking_time is not None:
-                    time_container.markdown(f"**Total thinking time: {total_thinking_time:.2f} seconds**")
+                    time_container.markdown(f"⏱️ **Total thinking time: {total_thinking_time:.2f} seconds**")
 
 
 if __name__ == "__main__":
