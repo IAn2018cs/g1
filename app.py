@@ -1,4 +1,6 @@
+import base64
 import json
+import logging
 import os
 import time
 
@@ -8,10 +10,14 @@ from dotenv import load_dotenv
 load_dotenv()
 from litellm import completion
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 
 def make_api_call(messages, max_tokens, temperature=0.2, is_final_answer=False, model="gpt-4o"):
     for attempt in range(3):
         try:
+            logger.info(f"Attempting API call (attempt {attempt + 1}/3)")
             response = completion(
                 model=model,
                 messages=messages,
@@ -19,24 +25,30 @@ def make_api_call(messages, max_tokens, temperature=0.2, is_final_answer=False, 
                 temperature=temperature,
                 response_format={"type": "json_object"},
             )
+            logger.info("API call successful")
             return json.loads(response.choices[0].message.content)
         except Exception as e:
+            logger.error(f"API call failed (attempt {attempt + 1}/3). Error: {str(e)}")
             if attempt == 2:
                 if is_final_answer:
+                    logger.error("Failed to generate final answer after 3 attempts")
                     return {
                         "title": "Error",
                         "content": f"Failed to generate final answer after 3 attempts. Error: {str(e)}",
                     }
                 else:
+                    logger.error("Failed to generate step after 3 attempts")
                     return {
                         "title": "Error",
                         "content": f"Failed to generate step after 3 attempts. Error: {str(e)}",
                         "next_action": "final_answer",
                     }
+            logger.info("Waiting 1 second before retrying")
             time.sleep(1)  # Wait for 1 second before retrying
 
 
 def generate_response(prompt, max_steps=5, temperature=0.2, model="gpt-4o"):
+    logger.info(f"Generating response for prompt: {prompt}")
     messages = [
         {
             "role": "system",
@@ -63,23 +75,26 @@ Example of a valid JSON response:
     total_thinking_time = 0
 
     while True:
+        logger.info(f"Starting step {step_count}")
         start_time = time.time()
         step_data = make_api_call(messages, 4096, temperature=temperature, model=model)
         end_time = time.time()
         thinking_time = end_time - start_time
         total_thinking_time += thinking_time
 
+        logger.info(f"Step {step_count} completed. Thinking time: {thinking_time:.2f} seconds")
         steps.append((f"Step {step_count}: {step_data['title']}", step_data["content"], thinking_time))
 
         messages.append({"role": "assistant", "content": json.dumps(step_data)})
 
         if step_data["next_action"] == "final_answer" or step_count >= max_steps:
+            logger.info("Reached final answer or max steps")
             break
 
         step_count += 1
 
-        # Yield after each step for Streamlit to update
-        yield steps, None  # We're not yielding the total time until the end
+        # 修改这里的 yield 语句
+        yield steps, None, None  # 我们现在yield三个值，但只有steps是有意义的
 
     # Generate final answer
     messages.append({"role": "user", "content": "Please provide the final answer based on your reasoning above."})
@@ -90,9 +105,25 @@ Example of a valid JSON response:
     thinking_time = end_time - start_time
     total_thinking_time += thinking_time
 
+    logger.info(f"Final answer generated. Thinking time: {thinking_time:.2f} seconds")
     steps.append(("Final Answer", final_data["content"], thinking_time))
 
-    yield steps, total_thinking_time
+    logger.info(f"Total thinking time: {total_thinking_time:.2f} seconds")
+    full_response = {"steps": steps, "total_thinking_time": total_thinking_time}
+    yield steps, total_thinking_time, full_response
+
+
+def get_binary_file_downloader_html(bin_file, file_label="File"):
+    with open(bin_file, "rb") as f:
+        data = f.read()
+    bin_str = base64.b64encode(data).decode()
+    href = f"""
+    <a href="data:application/octet-stream;base64,{bin_str}" download="{os.path.basename(bin_file)}"
+       style="display: inline-block; padding: 0.5em 1em; color: white; background-color: #4CAF50; text-decoration: none; border-radius: 4px;">
+        📥 Download {file_label}
+    </a>
+    """
+    return href
 
 
 def main():
@@ -152,7 +183,7 @@ def main():
         st.markdown("<br>", unsafe_allow_html=True)  # 添加间距
 
         st.markdown("### ⚙️ Generation Settings")
-        max_steps = st.slider("Max Steps", 3, 10, 5)
+        max_steps = st.slider("Max Steps", 3, 32, 10)
         temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.1)
 
         st.markdown("<br>", unsafe_allow_html=True)  # 添加间距
@@ -175,9 +206,10 @@ def main():
             # Create empty elements to hold the generated text and total time
             response_container = st.empty()
             time_container = st.empty()
+            download_container = st.empty()
 
             # Generate and display the response
-            for steps, total_thinking_time in generate_response(
+            for steps, total_thinking_time, full_response in generate_response(
                 user_query, max_steps=max_steps, temperature=temperature, model=model
             ):
                 with response_container.container():
@@ -190,8 +222,16 @@ def main():
                                 st.write(content)  # Use write instead of markdown to avoid HTML escaping issues
 
                 # Only show total time when it's available at the end
-                if total_thinking_time is not None:
+                if total_thinking_time is not None and full_response is not None:
                     time_container.markdown(f"⏱️ **Total thinking time: {total_thinking_time:.2f} seconds**")
+
+                    # Create JSON file and provide download link
+                    json_filename = "reasoning_chain.json"
+                    with open(json_filename, "w") as f:
+                        json.dump(full_response, f, indent=2)
+
+                    download_link = get_binary_file_downloader_html(json_filename, "Full Reasoning Chain JSON")
+                    download_container.markdown(download_link, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
