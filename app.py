@@ -123,6 +123,7 @@ def main():
                     for i, (title, content, thinking_time) in enumerate(steps):
                         if title.startswith("Final Answer"):
                             st.subheader(title)  # Use subheader instead of markdown
+                            st.write(content)
                         else:
                             with st.expander(f"{title} (Thinking time: {thinking_time:.2f} seconds)", expanded=True):
                                 st.write(content)  # Use write instead of markdown to avoid HTML escaping issues
