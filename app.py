@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -92,8 +93,8 @@ Example of a valid JSON response:
 
         step_count += 1
 
-        # Yield after each step for Streamlit to update
-        yield steps, None  # We're not yielding the total time until the end
+        # 修改这里的 yield 语句
+        yield steps, None, None  # 我们现在yield三个值，但只有steps是有意义的
 
     # Generate final answer
     messages.append({"role": "user", "content": "Please provide the final answer based on your reasoning above."})
@@ -108,7 +109,21 @@ Example of a valid JSON response:
     steps.append(("Final Answer", final_data["content"], thinking_time))
 
     logger.info(f"Total thinking time: {total_thinking_time:.2f} seconds")
-    yield steps, total_thinking_time
+    full_response = {"steps": steps, "total_thinking_time": total_thinking_time}
+    yield steps, total_thinking_time, full_response
+
+
+def get_binary_file_downloader_html(bin_file, file_label="File"):
+    with open(bin_file, "rb") as f:
+        data = f.read()
+    bin_str = base64.b64encode(data).decode()
+    href = f"""
+    <a href="data:application/octet-stream;base64,{bin_str}" download="{os.path.basename(bin_file)}"
+       style="display: inline-block; padding: 0.5em 1em; color: white; background-color: #4CAF50; text-decoration: none; border-radius: 4px;">
+        📥 Download {file_label}
+    </a>
+    """
+    return href
 
 
 def main():
@@ -191,9 +206,10 @@ def main():
             # Create empty elements to hold the generated text and total time
             response_container = st.empty()
             time_container = st.empty()
+            download_container = st.empty()
 
             # Generate and display the response
-            for steps, total_thinking_time in generate_response(
+            for steps, total_thinking_time, full_response in generate_response(
                 user_query, max_steps=max_steps, temperature=temperature, model=model
             ):
                 with response_container.container():
@@ -206,8 +222,16 @@ def main():
                                 st.write(content)  # Use write instead of markdown to avoid HTML escaping issues
 
                 # Only show total time when it's available at the end
-                if total_thinking_time is not None:
+                if total_thinking_time is not None and full_response is not None:
                     time_container.markdown(f"⏱️ **Total thinking time: {total_thinking_time:.2f} seconds**")
+
+                    # Create JSON file and provide download link
+                    json_filename = "reasoning_chain.json"
+                    with open(json_filename, "w") as f:
+                        json.dump(full_response, f, indent=2)
+
+                    download_link = get_binary_file_downloader_html(json_filename, "Full Reasoning Chain JSON")
+                    download_container.markdown(download_link, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
