@@ -130,8 +130,14 @@ def generate_response(prompt, max_steps=5, temperature=0.5, model="gpt-4o"):
     thinking_time = end_time - start_time
     total_thinking_time += thinking_time
 
+    if 'content' in final_data:
+        final_content = final_data["content"]
+    elif 'final_answer' in final_data:
+        final_content = final_data["final_answer"]
+    else:
+        final_content = json.dumps(final_data)
     logger.info(f"最终答案已生成。思考时间: {thinking_time:.2f} 秒")
-    steps.append(("最终答案", final_data["content"], thinking_time))
+    steps.append(("最终答案", final_content, thinking_time))
 
     logger.info(f"总思考时间: {total_thinking_time:.2f} 秒")
     full_response = {"steps": steps, "total_thinking_time": total_thinking_time}
