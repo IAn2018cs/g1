@@ -212,11 +212,16 @@ def main():
         max_steps = st.slider("最大步骤数", 3, 32, 10)
         temperature = st.slider("温度", 0.0, 1.0, 0.5, 0.1)
 
-    # 用户查询的文本输入
+    # 用户查询的文本输入和发送按钮
     st.markdown("### 🔍 输入您的查询")
-    user_query = st.text_input("输入您的查询:", placeholder="例如：单词'strawberry'中有多少个'R'?")
+    col1, col2 = st.columns([5, 1])  # 创建两列，比例为 5:1
+    with col1:
+        user_query = st.text_input("", placeholder="例如：单词'strawberry'中有多少个'R'?",
+                                   label_visibility="collapsed")
+    with col2:
+        send_button = st.button("发送")
 
-    if user_query:
+    if send_button and user_query:
         with st.spinner("正在生成回答..."):  # 添加加载指示器
             # 创建空元素以保存生成的文本和总时间
             response_container = st.empty()
