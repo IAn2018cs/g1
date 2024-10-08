@@ -6,44 +6,39 @@ import time
 
 import streamlit as st
 from dotenv import load_dotenv
-from openai import OpenAI
+
+from llm.V4 import Chatbot, AppBaseModel
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'), base_url=os.getenv('OPENAI_API_BASE'))
+client = Chatbot(api_key=os.getenv('OPENAI_API_KEY'), api_url=os.getenv('OPENAI_API_BASE'))
 
 
-def extract_first_json(response):
-    json_start = response.index("{")
-    json_end = response.find("}")
-    return json.loads(response[json_start:json_end + 1])
-
-
-def extract_json(response):
-    response = response.replace("JSON\n", "").replace("json\n", "").replace("```", "")
-    json_start = response.index("{")
-    json_end = response.rfind("}")
-    return json.loads(response[json_start:json_end + 1])
+class StepResultModel(AppBaseModel):
+    title: str
+    content: str
+    next_action: str
+    confidence: float
 
 
 def make_api_call(messages, max_tokens, temperature=0.5, is_final_answer=False, model="gpt-4o"):
     for attempt in range(3):
         try:
             logger.info(f"尝试进行API调用 (第 {attempt + 1}/3 次尝试)")
-            response = client.chat.completions.create(
+            content, _, _, _ = client.ask(
                 model=model,
-                messages=messages,
+                prompt=messages,
+                json_format=True,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                response_format={"type": "json_object"},
+                response_model=StepResultModel
             )
             logger.info("API调用成功")
-            content = response.choices[0].message.content
             logger.info(content)
-            return extract_first_json(content)
+            return json.loads(content)
         except Exception as e:
             logger.error(f"API调用失败 (第 {attempt + 1}/3 次尝试)。错误: {str(e)}")
             if attempt == 2:
@@ -69,31 +64,40 @@ def generate_response(prompt, max_steps=5, temperature=0.5, model="gpt-4o"):
     messages = [
         {
             "role": "system",
-            "content": """你是一位专家级AI助手，能够逐步解释你的推理过程。
-对于每一步，请提供一个描述该步骤内容的标题，以及具体内容。
-决定是否需要另一个步骤或是否准备好给出最终答案。以 JSON 格式回应，包含 'title'、'content' 和 'next_action' (next_action 的值只有 'continue' 或 'final_answer') 。
-尽可能使用多个推理步骤，至少 3 个。
-请注意你作为语言模型的局限性，以及你能做和不能做的事情。在你的推理中，包括对替代答案的探索。考虑到你可能是错的，如果你的推理中有错误，错误可能在哪里。
-充分测试所有其他可能性。你可能会犯错。当你说你在重新审视时，请真正地重新审视，并使用另一种方法来做到这一点。不要只是说你在重新审视。
-使用至少 3 种方法来得出答案。使用最佳实践。
+            "content": """You are an AI assistant that explains your reasoning step by step, incorporating dynamic Chain of Thought (CoT), reflection, and verbal reinforcement learning. Follow these instructions:
 
-有效JSON响应的示例:
+1. Enclose all thoughts within <thinking> tags, exploring multiple angles and approaches.
+2. Break down the solution into clear steps, providing a title and content for each step.
+3. After each step, decide if you need another step or if you're ready to give the final answer.
+4. Continuously adjust your reasoning based on intermediate results and reflections, adapting your strategy as you progress.
+5. Regularly evaluate your progress, being critical and honest about your reasoning process.
+6. Assign a quality score between 0.0 and 1.0 to guide your approach:
+   - 0.8+: Continue current approach
+   - 0.5-0.7: Consider minor adjustments
+   - Below 0.5: Seriously consider backtracking and trying a different approach
+7. If unsure or if your score is low, backtrack and try a different approach, explaining your decision.
+8. For mathematical problems, show all work explicitly using LaTeX for formal notation and provide detailed proofs.
+9. Explore multiple solutions individually if possible, comparing approaches in your reflections.
+10. Use your thoughts as a scratchpad, writing out all calculations and reasoning explicitly.
+11. Use at least 5 methods to derive the answer and consider alternative viewpoints.
+12. Be aware of your limitations as an AI and what you can and cannot do.
+
+After every 3 steps, perform a detailed self-reflection on your reasoning so far, considering potential biases and alternative viewpoints.
+
+Respond in JSON format with 'title', 'content', 'next_action' (either 'continue', 'reflect', or 'final_answer'), and 'confidence' (a number between 0 and 1) keys.
+
+Example of a valid JSON response:
 ```json
 {
-    "title": "识别关键信息",
-    "content": "为了开始解决这个问题，我们需要仔细检查给定的信息，并识别出将指导我们解决过程的关键元素。这涉及到...",
-    "next_action": "continue"
+    "title": "Identifying Key Information",
+    "content": "To begin solving this problem, we need to carefully examine the given information and identify the crucial elements that will guide our solution process. This involves...",
+    "next_action": "continue",
+    "confidence": 0.8
 }```
 
-注意，每次只输出一个推理步骤，不要全部输出，请等待下一步的指令和上下文信息，再继续输出推理步骤。
-""",
+Your goal is to demonstrate a thorough, adaptive, and self-reflective problem-solving process, emphasizing dynamic thinking and learning from your own reasoning.""",
         },
-        {"role": "user", "content": prompt},
-        {
-            "role": "assistant",
-            "content": "谢谢！我现在将按照我的指示，从分解问题开始，逐步思考。",
-        },
-        {"role": "user", "content": "continue"}
+        {"role": "user", "content": prompt}
     ]
 
     steps = []
@@ -109,20 +113,28 @@ def generate_response(prompt, max_steps=5, temperature=0.5, model="gpt-4o"):
         total_thinking_time += thinking_time
 
         logger.info(f"第 {step_count} 步完成。思考时间: {thinking_time:.2f} 秒")
-        steps.append((f"步骤 {step_count}: {step_data['title']}", step_data["content"], thinking_time))
+        steps.append((f"{step_data['title']}", step_data["content"], thinking_time))
 
         messages.append({"role": "assistant", "content": json.dumps(step_data)})
 
-        if step_data["next_action"] == "final_answer" or step_count >= max_steps:
+        if step_data["next_action"] == "final_answer" and step_count < max_steps:
+            messages.append({"role": "user",
+                             "content": "Please continue your analysis with at least 5 more steps before providing the final answer."})
+        elif step_data["next_action"] == "final_answer":
             logger.info("已达到最终答案或最大步骤数")
             break
-        messages.append({"role": "user", "content": step_data['next_action']})
+        elif step_data["next_action"] == 'reflect' or step_count % 3 == 0:
+            messages.append({"role": "user",
+                             "content": "Please perform a detailed self-reflection on your reasoning so far, considering potential biases and alternative viewpoints."})
+        else:
+            messages.append({"role": "user", "content": "Please continue with the next step in your analysis."})
         step_count += 1
 
         yield steps, None, None  # 我们现在yield三个值,但只有steps是有意义的
 
     # 生成最终答案
-    messages.append({"role": "user", "content": "请根据你上面的推理给出最终答案。注意还要以 JSON 的格式输出"})
+    messages.append({"role": "user",
+                     "content": "Please provide a comprehensive final answer based on your reasoning above, summarizing key points and addressing any uncertainties. USE JSON Formate"})
 
     start_time = time.time()
     final_data = make_api_call(messages, 4096, temperature=temperature, is_final_answer=True, model=model)
@@ -160,7 +172,7 @@ def get_binary_file_downloader_html(bin_file, file_label="文件"):
 def main():
     st.set_page_config(page_title="g1 原型", page_icon="🧠", layout="wide")
 
-    st.title("g1: 使用 GPT-4o 创建类似 o1 的推理链")
+    st.title("g1: 使用 LLM 创建类似 o1 的推理链")
 
     st.markdown(
         """
@@ -203,9 +215,9 @@ def main():
 
         st.markdown("### 🤖 模型设置")
         model_options = [
+            "claude-3-5-sonnet-20240620", "claude-3-haiku-20240307",
             "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo",
             "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.5-flash-8b-exp-0924",
-            "claude-3-5-sonnet-20240620", "claude-3-haiku-20240307",
             "qwen2-72b-instruct", "qwen2.5-72b-instruct",
             "llama-3.1-70b-versatile"
         ]
@@ -216,13 +228,13 @@ def main():
 
         st.markdown("### ⚙️ 生成设置")
         max_steps = st.slider("最大步骤数", 3, 32, 10)
-        temperature = st.slider("温度", 0.0, 1.0, 0.5, 0.1)
+        temperature = st.slider("温度", 0.0, 1.0, 0.2, 0.1)
 
     # 用户查询的文本输入和发送按钮
     st.markdown("### 🔍 输入您的查询")
     col1, col2 = st.columns([5, 1])  # 创建两列，比例为 5:1
     with col1:
-        user_query = st.text_input("", placeholder="例如：单词'strawberry'中有多少个'R'?",
+        user_query = st.text_input("", placeholder="例如：1.11 和 1.3 哪个大?",
                                    label_visibility="collapsed")
     with col2:
         send_button = st.button("发送")
